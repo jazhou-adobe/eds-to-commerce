@@ -280,6 +280,44 @@ regression-check the project's own pages** — custom blocks, header/footer, and
 styling should still work. That regression pass is the part the wholesale-replace
 approach skips and breaks.
 
+## Step 11 — Author a demo page and share a preview link
+
+Local drafts prove the code, but reviewers (and the EDS PR convention) want a
+working page on the real **branch preview** — `https://<branch>--<repo>--<owner>.aem.page/<path>`.
+Content is **not** branch-specific: the same authored page renders against
+whichever branch's code you preview, so author the page once in the content
+source, then preview it on the feature branch's ref.
+
+For a **document-authoring (DA / da.live) site** at
+`https://da.live/#/<owner>/<repo>`:
+
+1. **Author the page.** In `da.live`, create the page (e.g. `/shop`) and add the
+   commerce block as a table — the first row is the block name, following rows are
+   key/value config. A PLP page is one table:
+
+   | Product List Page |
+   | --- |
+   | pageSize | 12 |
+
+   A PDP page is a single `Product Details` table, and the **page path must be**
+   `/products/<urlKey>/<sku>` so the block can read the SKU from the URL.
+
+   (If you have the DA MCP / API connected, write the page HTML to
+   `https://admin.da.live/source/<owner>/<repo>/<path>.html` instead of clicking.)
+
+2. **Preview on the branch ref** so it picks up your branch's code:
+   `POST https://admin.hlx.page/preview/<owner>/<repo>/<branch>/<path>`
+   (or click **Preview** in the DA sidebar, then open the branch preview URL).
+
+3. **Share the link** in the PR description:
+   `https://<branch>--<repo>--<owner>.aem.page/<path>`. Prefer the **PLP** page as
+   the primary demo — it renders fully. If you include a PDP and the product data
+   is blank, link it with the Gotcha-3 backend note so reviewers don't read it as a
+   conversion bug.
+
+For Google/SharePoint-backed sites the idea is identical — author the page in the
+doc source, preview on the branch ref, share the branch preview URL.
+
 ## File manifest
 
 | File(s) | Action |
