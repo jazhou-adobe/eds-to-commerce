@@ -135,13 +135,13 @@ Use the user-provided sandbox config (NA1 sandbox tenant):
 }
 ```
 
-**Wiring (to verify against the running dev server):** the drop-ins resolve config via
-`@dropins/tools/lib/aem/configs.js`, which fetches a published `configs` sheet
-(`/configs.json` style) relative to the code base path. For local validation we place
-this JSON where the dev server / `getConfigValue` reads it (candidate locations:
-`/config.json` at repo root served by `aem up`, or a local `configs` content file). The
-exact path is the single empirically-confirmed step; the skill will document the
-confirmed answer rather than a guess.
+**Wiring (decided):** the drop-ins resolve config via
+`@dropins/tools/lib/aem/configs.js`, which reads store config relative to the code base
+path. We provide the sandbox config as a **`config.json` at the repo root**, served by
+`aem up` at `/config.json`. Execution still verifies `getConfigValue` actually reads it
+on the running server (and that `config.json` is not blocked by `.hlxignore`); if the
+running drop-ins expect a different filename/shape, that's the one item adjusted during
+execution and recorded in the skill.
 
 ## Validation strategy
 
