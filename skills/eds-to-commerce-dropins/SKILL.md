@@ -258,6 +258,12 @@ endpoints are often the same unified GraphQL URL with no `x-api-key`. A classic
 Adobe Commerce + separate Catalog Service tenant needs `x-api-key` and
 `Magento-Environment-Id` in the `cs` headers.
 
+In **production** this same config lives in the site's **Config Service** entry
+(the `public.default` block of `https://admin.hlx.page/config/<org>/sites/<site>.json`
+— see Step 12), not in a repo file. The local `config.json` is the dev-time
+stand-in; keep the two in sync. The boilerplate's `default-site.json` is the
+template for that production config.
+
 ## Step 10 — Validate locally
 
 ```bash
@@ -299,8 +305,26 @@ For a **document-authoring (DA / da.live) site** at
    | --- |
    | pageSize | 12 |
 
-   (If you have the DA MCP / API connected, write the page HTML to
-   `https://admin.da.live/source/<owner>/<repo>/<path>.html` instead of clicking.)
+   In **DA the document is HTML**, and a block is a `<div class="blockname">` whose
+   rows are nested `<div>`s and whose cells wrap text in `<p>`. So the PLP table
+   above is authored as:
+
+   ```html
+   <body><header></header><main>
+     <div>
+       <h1>Shop</h1>
+       <div class="product-list-page"><div><div><p>pageSize</p></div><div><p>12</p></div></div></div>
+     </div>
+   </main><footer></footer></body>
+   ```
+
+   Page metadata is a trailing `<div class="metadata">` with the same row/cell
+   shape (e.g. `title`, `description`). If you have the DA MCP / API connected,
+   `PUT`/`POST` this HTML to
+   `https://admin.da.live/source/<owner>/<repo>/<path>.html` (or use the DA
+   `da_create_source` tool) instead of clicking. DA **lowercases the stored path**,
+   so don't rely on path casing for anything case-sensitive (e.g. a SKU) — carry it
+   in metadata instead.
 
    **PDP works differently — there is ONE page, not one per product.** Do NOT
    author a page per SKU. Author a single template at **`/products/default`** (the
@@ -329,6 +353,58 @@ For a **document-authoring (DA / da.live) site** at
 
 For Google/SharePoint-backed sites the idea is identical — author the page in the
 doc source, preview on the branch ref, share the branch preview URL.
+
+## Step 12 — Site config & PDP URL routing (Config Service)
+
+Two production concerns are not in the repo or the content — they live in the
+site's **Config Service** entry, a JSON document per site:
+
+```bash
+# read
+curl -s -H "Authorization: Bearer <IMS_TOKEN>" \
+  https://admin.hlx.page/config/<org>/sites/<site>.json
+# write (review the diff first!)
+curl -s -X POST -H "Authorization: Bearer <IMS_TOKEN>" -H 'Content-Type: application/json' \
+  --data @site-config.json \
+  https://admin.hlx.page/config/<org>/sites/<site>.json
+```
+
+Auth needs an IMS token and your email in `access.admin.role.config_admin` (the
+`default-site.json` template already lists it). Many teams edit this through the
+AEM Sidekick / aem.live admin UI instead of curl. This config holds (a) the
+production commerce backend config (`public.default`, Step 9) and (b) the PDP URL
+routing.
+
+**PDP URL routing is the part most people miss.** A single `products/default`
+template (Step 11) only answers at `/products/default`. To make real
+`/products/<urlKey>/<sku>` URLs resolve to it you need **folder mapping**
+(`/products/` → `/products/default`):
+
+```yaml
+# fstab-style; in a Config Service site it's the equivalent `folders` map
+folders:
+  /products/: /products/default
+```
+
+**Caveat that will bite you:** folder mapping is **feature-flagged and being
+deprecated**. The aem.live doc now reads *"contact us if you have a use case for
+folder mapping… existing projects may need to migrate"* and explicitly names
+JSON-LD-bearing product pages as an **anti-pattern** (folder-mapped URLs serve an
+infinite `200` URL space with no per-page SEO). So:
+
+1. **Engage your Adobe contact / aem.live support** to enable the flag for the
+   site, or to get the current recommended PDP routing for new commerce projects —
+   don't assume folder mapping is just a config toggle you own.
+2. Pair it with a **bulk-metadata** sheet so each product URL still gets
+   `sku`/OG/JSON-LD server-side: run `tools/pdp-metadata` (it queries Catalog
+   Service and emits `metadata.json` in the bulk-metadata format), upload it to the
+   content source (`https://admin.da.live/source/<org>/<site>/metadata.json` for
+   DA), and wire it via the [bulk metadata](https://www.aem.live/docs/bulk-metadata)
+   feature. This is what satisfies the SEO requirement the anti-pattern warns about.
+
+Until both are in place, `/products/default` previews the template (rendering
+whatever `getMetadata('sku')`/`defaultSku` points at, subject to Gotcha 3), but
+real per-product URLs won't resolve — which is expected, not a conversion bug.
 
 ## File manifest
 
@@ -379,6 +455,18 @@ Update drop-ins later with `npm update @dropins/...` then `npm run postupdate`.
    drop-ins never initialize, re-check the four `scripts.js` seams (Step 4); if
    imports don't resolve, re-check the importmap merge (Step 5).
 
+7. **PDP URL routing is a site-config + Adobe-enablement step, not a code step.**
+   A real `/products/<urlKey>/<sku>` URL 404s until folder mapping is configured in
+   the Config Service (Step 12), and that flag is being deprecated — so this lands
+   outside the conversion itself. Don't read a 404 on a product URL (or a working
+   `/products/default` but failing `/products/x/y`) as a broken conversion.
+
+8. **Preview is per-ref and needs auth.** Content is shared across code branches,
+   but a page must be previewed at least once
+   (`POST admin.hlx.page/preview/<org>/<repo>/<ref>/<path>`, or Sidekick → Preview)
+   before it answers — and that admin API requires an IMS token. The DA write API
+   and the aem.live preview/config APIs are **separate auth surfaces**.
+
 ## Success criteria
 
 - `npm install` and `npm run lint` pass.
@@ -388,3 +476,5 @@ Update drop-ins later with `npm update @dropins/...` then `npm run postupdate`.
   containers. Remaining missing *data* points at the backend (Gotcha 3).
 - **The project's pre-existing pages, blocks, and styling still work** — the
   conversion added commerce without regressing the site.
+- A demo page (PLP at `/shop` recommended) is previewed and linked in the PR; PDP
+  URL routing (Step 12) is tracked separately as a site-config/Adobe item.
